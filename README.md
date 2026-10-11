@@ -1,265 +1,166 @@
+# AI-Powered Adaptive Traffic Control System (ATCS)
+### Production-Ready Prototype & Intelligent Urban Infrastructure Framework
+
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Edge AI](https://img.shields.io/badge/Hardware-NVIDIA%20Jetson%20%2F%20RPi4-green.svg)]()
+[![YOLOv8](https://img.shields.io/badge/Vision-YOLOv8%20Ultralytics-orange.svg)](https://docs.ultralytics.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## 🚦 System Overview & Architectural Paradigm
+
+The **AI-Powered Adaptive Traffic Control System (ATCS)** is an edge-native, real-time cyber-physical traffic signal management platform. It replaces outdated static fixed-time signal controllers (which cause severe congestion, fuel wastage, and transit bottlenecks) with an intelligent, multi-modal autonomous control system.
+
+The system consolidates four mission-critical subsystems:
+1. **Module A (Dynamic Adaptive Signal Timing Engine)**: YOLOv8 Computer Vision detecting multi-class traffic (cars, bikes, buses, trucks) paired with **Dual-Metric Density Calculation** (raw counts + pixel-based physical space occupancy in $m^2$).
+2. **Module B (Emergency Vehicle Preemption - EVP)**: Multi-modal override system utilizing visual strobe recognition and an acoustic **Fast Fourier Transform (FFT)** filter detecting emergency siren frequencies ($1000\text{ Hz} - 3000\text{ Hz}$) as a fail-safe in dense fog/rain/occlusion.
+3. **Module C (Virtual Stopline ANPR & Automated E-Challan Enforcement)**: Automated legal enforcement tracking vehicles crossing stoplines during a RED phase, triggering plate OCR (EasyOCR), and auto-logging violations to an SQLite database (`echallans`).
+4. **Module D (Live Carbon Offset & Sustainability Tracking Engine)**: Real-time mathematical modeling calculating avoided idling vehicle-hours, fuel conserved (Liters), urban $\text{CO}_2$ emissions prevented (kg), and equivalent urban tree offsets.
+5. **System Decision Matrix**: Strict 4-tier anti-deadlock priority hierarchy (Emergency > VIP > High-Density > Standard) with starvation protection ($T_{\text{wait}} \le 110\text{s}$).
+6. **Dual Control Interface**: Multi-pane real-time OpenCV HUD display & Streamlit Operations Command Center.
 
-PROJECT PROPOSAL: ADAPTIVE TRAFFIC CONTROL SYSTEM (ATCS)
+---
 
+## 🏛️ System Architecture Diagram
 
-Document Type: Technical Project Proposal & Architecture Specification
+```mermaid
+graph TD
+    subgraph SENSING ["SENSORY INGESTION LAYER"]
+        C1["CCTV Stream North"] --> YOLO["YOLOv8 Detection Engine"]
+        C2["CCTV Stream South"] --> YOLO
+        C3["CCTV Stream East"] --> YOLO
+        C4["CCTV Stream West"] --> YOLO
+        MIC["Microphone Array"] --> FFT["Acoustic FFT Filter (1000-3000 Hz)"]
+    end
 
-Project Title: Adaptive Traffic Control System (ATCS) – AI-Powered Dynamic Traffic Management, Priority Emergency Clearance & Automated Law Enforcement
+    subgraph CORE ["PERCEPTION & METRICS PIPELINE"]
+        YOLO --> COUNTS["Raw Vehicle Counts per Lane"]
+        YOLO --> OCC["Pixel-Based Spatial Occupancy (m²)"]
+        YOLO --> EM_VIS["Visual Emergency Strobe Detector"]
+        FFT --> EM_AUD["Acoustic Siren Detector"]
+        COUNTS --> PRESSURE["True Queue Pressure Aggregator"]
+        OCC --> PRESSURE
+    end
 
-Team Name: INNOV SQUAD
+    subgraph ARBITRATION ["4-TIER PRIORITY DECISION MATRIX"]
+        EM_VIS --> L1["Level 1: Emergency Override (EVP)"]
+        EM_AUD --> L1
+        VIP["VIP / Transit Preemption"] --> L2["Level 2: Priority Corridor"]
+        PRESSURE --> L3["Level 3: High Density (>70% Occupancy)"]
+        PRESSURE --> L4["Level 4: Standard Adaptive Traffic"]
+        STARVE["Starvation Monitor (Max 110s)"] -.->|Deadlock Breaker| ARB["Signal Phase Arbitrator"]
+        L1 --> ARB
+        L2 --> ARB
+        L3 --> ARB
+        L4 --> ARB
+    end
+
+    subgraph ENFORCEMENT ["MODULE C: LAW ENFORCEMENT"]
+        ARB --> RED_SIG["Active RED Signal State"]
+        RED_SIG --> BREACH["Virtual Stopline Vector Tracker"]
+        BREACH --> ANPR["EasyOCR License Plate Recognition"]
+        ANPR --> VAULT[("SQLite Evidence Vault")]
+    end
 
-Institution: Anand International College of Engineering (Anand-ICE), Jaipur
+    subgraph SUSTAINABILITY ["MODULE D: CARBON OFFSET ENGINE"]
+        ARB --> GREEN_TIME["Adaptive Green Duration"]
+        GREEN_TIME --> DELAY_MODEL["Webster Delay Reduction Model"]
+        DELAY_MODEL --> CO2["CO2 (kg) & Fuel (L) Prevented"]
+        CO2 --> SUST_LOG[("SQLite Sustainability Log")]
+    end
+
+    subgraph INTERFACE ["UNIFIED COMMAND HUBS"]
+        ARB --> HUD["OpenCV 4-Lane Real-Time HUD Display"]
+        CO2 --> HUD
+        VAULT --> WEB["Streamlit Operations Command Center"]
+        CO2 --> WEB
+    end
+```
+
+---
+
+## 🔬 Mathematical Formulations
+
+### 1. Dual-Metric Spatial Density & Queue Pressure (Module A)
+To accurately weigh high-capacity and heavy vehicles (buses and heavy trucks) higher than light personal vehicles, the system computes both discrete vehicle counts and continuous physical road area footprints:
+
+$$\text{Effective Occupancy } (m^2) = \max \left( \sum_{v \in ROI} A_{\text{footprint}, v}, \quad \frac{\text{Pixels}(BBox_v \cap ROI)}{\text{Area}_{ROI\_px}} \times A_{\text{physical\_ROI}} \right)$$
+
+$$\text{Occupancy \%} = \min \left( 100.0, \frac{\text{Effective Occupancy } (m^2)}{A_{\text{physical\_ROI}}} \times 100 \right)$$
+
+True approach queue pressure combining spatial saturation and Passenger Car Units (PCU):
+
+$$\text{Pressure}_L = 0.65 \times \left( \frac{\text{Occupancy \%}_L}{100} \right) + 0.35 \times \left( \frac{\text{PCU}_L}{\max(\text{Total PCU}, 1)} \right)$$
+
+### 2. Adaptive Green Allocation with Anti-Starvation Protection (Decision Matrix)
+When transitioning from ALL-RED to GREEN, the target lane receives:
+
+$$T_{\text{green}} = T_{\min} + (T_{\max} - T_{\min}) \times \left( \frac{\text{Pressure}_L}{\sum_j \text{Pressure}_j} \right)$$
+
+- $T_{\min} = 10.0\text{ s}$ (ensures pedestrian crossing safety)
+- $T_{\max} = 65.0\text{ s}$ (prevents starvation)
+- Anti-starvation condition: If $T_{\text{wait}, i} \ge 110.0\text{ s}$, Lane $i$ immediately preempts cycle selection.
 
-Category / Theme: Software / Hardware-Hybrid Track (Smart Automation / Smart Vehicles / Transportation & Logistics)
+### 3. Fast Fourier Transform (FFT) Siren Spectral Filter (Module B)
+Microphone array audio buffers are windowed using a Hann window and processed via real Fast Fourier Transform:
 
-Target Event: Smart India Hackathon (SIH) 2026
+$$X(f) = \sum_{n=0}^{N-1} x[n] \cdot w[n] \cdot e^{-j 2\pi f n / N}$$
 
+$$\text{Power Spectral Density (PSD)}: \quad P(f) = \frac{|X(f)|^2}{N \cdot f_s}$$
 
-1. PROJECT EXECUTIVE SUMMARY
-The Adaptive Traffic Control System (ATCS) is an end-to-end, multi-modal intelligent traffic management solution designed to replace obsolete fixed-timer traffic signals. By leveraging Edge-AI, Real-Time Computer Vision (YOLOv8), Automatic Number Plate Recognition (EasyOCR), and Acoustic Siren Detection, ATCS dynamically calculates green light durations based on live vehicle density, guarantees priority "Green Wave" corridors for emergency vehicles, automates red-light violation enforcement (E-Challan), and provides live carbon footprint reduction analytics.
+$$\text{SNR}_{\text{siren}} = 10 \log_{10} \left( \frac{P(f_{\text{peak}})}{P_{\text{noise\_floor}}} \right) \quad \text{for } f \in [1000\text{ Hz}, 3000\text{ Hz}]$$
 
+Siren detection is confirmed when $\text{SNR} \ge 8.5\text{ dB}$ and spectral peak sharpness $\ge 2.0$.
 
-2. PROBLEM STATEMENT & PAIN POINTS
+### 4. Live Carbon & Fuel Emissions Offset Model (Module D)
+Avoided delay compared to static baseline signal (Webster's delay reduction model ~25%):
 
- * Fixed-Timer Inefficiency: Conventional traffic lights operate on static, rigid timers, forcing vehicles to wait at empty intersections while adjacent roads experience severe bottleneck congestion.
+$$\Delta t_{\text{saved}} = \sum_{v \in \text{cleared}} (d_{\text{static}} - d_{\text{adaptive}})$$
 
- * Emergency Response Bottlenecks: Ambulances and fire trucks lose critical time stuck in traffic during the "Golden Hour" due to a lack of automated priority signaling.
+$$\text{Fuel Saved (Liters)} = \Delta t_{\text{saved}} \times \left( N_{\text{cars}} r_{\text{car}} + N_{\text{bikes}} r_{\text{bike}} + N_{\text{heavy}} r_{\text{heavy}} \right)$$
 
- * Manual Enforcement Limitations: Traffic police personnel cannot monitor all intersections 24/7, resulting in widespread undetected red-light violations.
+- $r_{\text{car}} = 0.000319\text{ L/s}$ (1.15 L/hr idle)
+- $r_{\text{bike}} = 0.0000694\text{ L/s}$ (0.25 L/hr idle)
+- $r_{\text{heavy}} = 0.000889\text{ L/s}$ (3.20 L/hr idle)
+- $\text{CO}_2 \text{ Prevented (kg)} = \text{Fuel Saved (L)} \times 2.42\text{ kg CO}_2/\text{L}$
+- $\text{Urban Tree Equivalents} = \frac{\text{CO}_2 \text{ Prevented (kg)}}{21.77\text{ kg/tree-year}}$
 
- * Environmental & Economic Losses: Excessive engine idling at static red lights wastes fuel and inflates urban carbon (CO_2) emissions significantly.
+---
 
+## 🚀 Execution Guide
 
-3. CORE SYSTEM MODULES & INNOVATIVE FEATURES
-Module A: Dynamic Traffic Signal Timing
+### Option 1: Interactive Quick Launcher
+```bash
+python run_demo.py
+```
+Presents a selection menu to launch HUD, Streamlit, or the automated test suite.
 
- * Real-Time Object Detection: Utilizes YOLOv8 to detect and classify cars, motorcycles, buses, and trucks.
+### Option 2: Live OpenCV 4-Lane Real-Time HUD Display
+```bash
+python atcs_system.py --mode hud
+```
+**Interactive Keyboard Hotkeys in HUD Window:**
+- `A` : Dispatch Ambulance into North Approach (triggers Level 1 Visual EVP)
+- `S` : Inject 1.8 kHz Acoustic Siren audio burst (triggers Level 1 Acoustic EVP)
+- `R` : Force vehicle red-light breach (triggers Module C Stopline ANPR & E-Challan)
+- `Q` or `ESC` : Graceful exit
 
- * Pixel-Based Space Occupancy: Measures actual road space occupied (m^2) alongside vehicle counts to accurately weigh heavy vehicles (buses/trucks) against smaller ones (cars/bikes).
+### Option 3: Streamlit Operations & Analytics Command Center
+```bash
+streamlit run ui/streamlit_app.py
+```
+Access the dashboard at `http://localhost:8501`. Features live feeds, EVP override buttons, acoustic FFT spectrogram visualizer, and e-challan legal registry.
 
- * Adaptive Allocation Algorithm: Dynamically extends or reduces green light duration based on live lane occupancy metrics.
+### Option 4: Automated Verification Test Suite
+```bash
+python -m unittest test_atcs.py -v
+```
 
+---
 
-Module B: Priority Emergency Clearance (EVP)
+## 🗄️ Database Schema (`atcs_traffic.db`)
 
- * Visual AI Recognition: YOLOv8 detects emergency vehicles (Ambulances, Fire Engines, Police) visually.
-
- * Acoustic Siren Detection (Fail-Safe): Uses directional microphones and Fast Fourier Transform (FFT) signal processing to identify emergency siren frequency bands (1000\text{ Hz} - 3000\text{ Hz}) during low-visibility conditions (fog, night, obstacles).
-
- * Smart Green Wave Corridor: Forces immediate green signals for emergency vehicles while locking conflicting lanes to red.
-
-
-Module C: Automated ANPR & E-Challan System
-
- * Virtual Stopline Enforcement: Tracks vehicles crossing designated virtual intersection stoplines during red signal phases.
-
- * Automatic Number Plate Recognition (ANPR): Extracts license plate alphanumeric text using EasyOCR/PaddleOCR.
-
- * Digital Evidence Logging: Saves violation timestamps, plate text, cropped vehicle images, and violation details directly into a secure SQLite database.
-
-
-Module D: Carbon Savings & Sustainability Engine
-
- * Real-Time Carbon Offset Calculator: Quantifies fuel saved (liters) and CO_2 emissions avoided (kg) by reducing idle waiting times.
-
- * Smart Dashboard Display: Live HUD showing system status, traffic metrics, active signal timers, and environmental impact.
-
-
-4. SYSTEM ARCHITECTURE & PIPELINE DIAGRAMS
-High-Level Architecture Flowchart
-                      +----------------------------------+
-                      |         INPUT SOURCES            |
-                      | Live CCTV Feed + Microphones     |
-                      +----------------+-----------------+
-                                       |
-                                       v
-                      +----------------------------------+
-                      |     EDGE-AI PROCESSING UNIT      |
-                      |  YOLOv8 + FFT Siren + Stopline   |
-                      +----------------+-----------------+
-                                       |
-         +-----------------------------+-----------------------------+
-         |                             |                             |
-         v                             v                             v
-+------------------+         +-------------------+         +-------------------+
-| DYNAMIC SIGNAL   |         | EMERGENCY OVERRIDE|         | ANPR & EASYOCR    |
-| Adaptive Timing  |         | Instant Green Wave|         | E-Challan Logging |
-+--------+---------+         +---------+---------+         +---------+---------+
-         |                             |                             |
-         +-----------------------------+-----------------------------+
-                                       |
-                                       v
-                      +----------------------------------+
-                      |  OUTPUTS & DATABASE LOGS         |
-                      | Real-Time Traffic Signals +      |
-                      | SQLite E-Challan DB + Dashboard  |
-                      +----------------------------------+
-
-
-
-5. TECHNICAL STACK
-
- * Programming Language: Python
- * Computer Vision & AI: OpenCV, Ultralytics YOLOv8, DeepSORT
- * OCR & ANPR: EasyOCR / PaddleOCR
- * Signal & Audio Processing: SciPy, Librosa (FFT Analysis)
- * Database & Storage: SQLite / PostgreSQL
- * Edge Hardware Targets: Raspberry Pi 4 / NVIDIA Jetson Nano
- * Traffic Simulation (Testing): SUMO (Simulation of Urban Mobility)
-
-
-6. COMPLETE PRODUCTION PYTHON CODE
-
-Save the following code as main_atcs.py:
-import cv2
-import numpy as np
-import time
-import sqlite3
-import os
-import easyocr
-from ultralytics import YOLO
-import scipy.io.wavfile as wav
-
-# ==========================================
-# 1. DATABASE INITIALIZATION
-# ==========================================
-def init_database():
-    conn = sqlite3.connect('atcs_traffic_logs.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS echallans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            plate_number TEXT,
-            violation_type TEXT,
-            image_path TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-init_database()
-
-# ==========================================
-# 2. ACOUSTIC SIREN DETECTION MODULE
-# ==========================================
-def detect_siren_from_audio_frequency(audio_file_path=None):
-    if audio_file_path and os.path.exists(audio_file_path):
-        sample_rate, data = wav.read(audio_file_path)
-        fft_spectrum = np.abs(np.fft.rfft(data))
-        freqs = np.fft.rfftfreq(len(data), 1/sample_rate)
-        peak_freq = freqs[np.argmax(fft_spectrum)]
-        if 1000 <= peak_freq <= 3000:
-            return True, int(peak_freq)
-    return False, 0
-
-# ==========================================
-# 3. CARBON SAVINGS ANALYTICS ENGINE
-# ==========================================
-def calculate_carbon_savings(total_vehicles_processed, avg_time_saved_sec=15):
-    total_hours_saved = (total_vehicles_processed * avg_time_saved_sec) / 3600.0
-    co2_saved_kg = total_hours_saved * 1.5  # ~1.5 kg CO2 saved per hour of reduced idling
-    fuel_saved_liters = total_hours_saved * 0.6  # ~0.6 L fuel saved per hour
-    return round(co2_saved_kg, 2), round(fuel_saved_liters, 2)
-
-# ==========================================
-# 4. COMPUTER VISION & OCR PIPELINE
-# ==========================================
-model = YOLO('yolov8n.pt')
-reader = easyocr.Reader(['en'], gpu=False)
-TARGET_CLASSES = [2, 3, 5, 7]  # Car, Motorcycle, Bus, Truck
-
-def process_traffic_stream(video_source=0):
-    cap = cv2.VideoCapture(video_source)
-    signal_state = "GREEN"
-    signal_timer = 20
-    last_timer_update = time.time()
-    total_vehicles_counter = 0
-    STOPLINE_Y = 350
-    
-    os.makedirs('challan_evidence', exist_ok=True)
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frame = cv2.resize(frame, (800, 500))
-        line_color = (0, 0, 255) if signal_state == "RED" else (0, 255, 0)
-        cv2.line(frame, (50, STOPLINE_Y), (750, STOPLINE_Y), line_color, 3)
-
-        results = model(frame, verbose=False)[0]
-        vehicle_count = 0
-        emergency_detected = False
-
-        for box in results.boxes:
-            cls_id = int(box.cls[0])
-            conf = float(box.conf[0])
-            
-            if cls_id in TARGET_CLASSES and conf > 0.4:
-                vehicle_count += 1
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 200, 0), 2)
-                
-                # Check Stopline Violation during RED Signal
-                if signal_state == "RED" and y2 > STOPLINE_Y and y1 < STOPLINE_Y:
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                    vehicle_crop = frame[y1:y2, x1:x2]
-                    
-                    if vehicle_crop.size > 0:
-                        ocr_res = reader.readtext(vehicle_crop)
-                        plate_text = ocr_res[0][1].upper() if len(ocr_res) > 0 else "UNKNOWN"
-                        img_filename = f"challan_evidence/violator_{int(time.time())}.jpg"
-                        cv2.imwrite(img_filename, vehicle_crop)
-                        
-                        conn = sqlite3.connect('atcs_traffic_logs.db')
-                        c = conn.cursor()
-                        c.execute("INSERT INTO echallans (timestamp, plate_number, violation_type, image_path) VALUES (?, ?, ?, ?)",
-                                  (time.strftime('%Y-%m-%d %H:%M:%S'), plate_text, "Red Light Violation", img_filename))
-                        conn.commit()
-                        conn.close()
-
-        total_vehicles_counter += vehicle_count
-        siren_active, siren_freq = detect_siren_from_audio_frequency()
-        
-        # Adaptive Timer Logic
-        if siren_active or emergency_detected:
-            signal_state = "EMERGENCY GREEN"
-            signal_timer = 30
-        else:
-            if time.time() - last_timer_update > 5:
-                base_time = 10
-                signal_timer = base_time + min(vehicle_count * 2, 40)
-                signal_state = "GREEN" if vehicle_count > 3 else "RED"
-                last_timer_update = time.time()
-
-        co2_saved, fuel_saved = calculate_carbon_savings(total_vehicles_counter)
-
-        # UI Overlay
-        cv2.rectangle(frame, (0, 0), (800, 80), (30, 30, 30), -1)
-        state_color = (0, 255, 0) if "GREEN" in signal_state else (0, 0, 255)
-        cv2.putText(frame, f"SIGNAL: {signal_state}", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, state_color, 2)
-        cv2.putText(frame, f"LANE VEHICLES: {vehicle_count}", (300, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-        cv2.putText(frame, f"CO2 REDUCED: {co2_saved} kg", (550, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 1)
-        cv2.putText(frame, f"FUEL SAVED: {fuel_saved} L", (550, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 1)
-
-        cv2.imshow("ATCS - Smart City AI Engine", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    process_traffic_stream(0)
-
-
-
-
-
-7. PROJECTED IMPACT & OUTCOMES
-
- * 20–30% Reduction in average junction waiting times.
- * Zero Delay for Emergency Services: Preserves patient "Golden Hours" through automated Green Wave clearance.
- * Environmental Benefits: Measurable daily reduction in fuel consumption and urban CO_2 emissions.
- * 24/7 Automated Compliance: Enforces stricter adherence to traffic rules via digital E-Challan tracking.
+1. **`echallans`**: `id`, `timestamp`, `lane_id`, `vehicle_type`, `license_plate`, `confidence`, `image_path`, `violation_type`, `fine_amount`, `status`.
+2. **`traffic_telemetry`**: `id`, `timestamp`, `lane_id`, `vehicle_count`, `spatial_occupancy_m2`, `occupancy_percent`, `pcu_count`, `signal_state`, `allocated_green_s`, `priority_level`.
+3. **`sustainability_log`**: `id`, `timestamp`, `cycle_id`, `avoided_delay_seconds`, `fuel_saved_liters`, `co2_prevented_kg`, `monetary_savings_usd`.

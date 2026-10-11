@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+data/*.db
+data/*.db-shm
+data/*.db-wal
+evidence_vault/*
+!evidence_vault/.gitkeep
+
+.vscode/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
